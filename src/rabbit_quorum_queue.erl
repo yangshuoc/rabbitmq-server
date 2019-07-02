@@ -16,6 +16,8 @@
 
 -module(rabbit_quorum_queue).
 
+-behaviour(rabbit_queue_type).
+
 -export([init_state/2, handle_event/2]).
 -export([declare/1, recover/1, stop/1, delete/4, delete_immediately/2]).
 -export([info/1, info/2, stat/1, infos/1]).
@@ -602,7 +604,7 @@ cleanup_data_dir() ->
                  Name
              end
              || Q <- rabbit_amqqueue:list_by_type(?MODULE),
-                lists:member(node(), get_nodes(Q))],
+                lists:member(node(), amqqueue:get_quorum_nodes(Q))],
     Registered = ra_directory:list_registered(),
     _ = [maybe_delete_data_dir(UId) || {Name, UId} <- Registered,
                                        not lists:member(Name, Names)],
@@ -816,7 +818,7 @@ shrink_all(Node) ->
          end
      end || Q <- rabbit_amqqueue:list(),
             amqqueue:get_type(Q) == ?MODULE,
-            lists:member(Node, get_nodes(Q))].
+            lists:member(Node, amqqueue:get_quorum_nodes(Q))].
 
 -spec grow(node(), binary(), binary(), all | even) ->
     [{rabbit_amqqueue:name(),
@@ -1022,7 +1024,7 @@ i(online, Q) -> online(Q);
 i(leader, Q) -> leader(Q);
 i(open_files, Q) when ?is_amqqueue(Q) ->
     {Name, _} = amqqueue:get_pid(Q),
-    Nodes = get_nodes(Q),
+    Nodes = amqqueue:get_quorum_nodes(Q),
     {Data, _} = rpc:multicall(Nodes, ?MODULE, open_files, [Name]),
     lists:flatten(Data);
 i(single_active_consumer_pid, Q) when ?is_amqqueue(Q) ->
