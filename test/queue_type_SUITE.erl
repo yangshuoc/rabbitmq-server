@@ -42,7 +42,7 @@ end_per_suite(Config) ->
     ok.
 
 init_per_group(Group, Config) ->
-    ClusterSize = 1,
+    ClusterSize = 3,
     Config1 = rabbit_ct_helpers:set_config(Config,
                                            [{rmq_nodes_count, ClusterSize},
                                             {rmq_nodename_suffix, Group},
@@ -53,6 +53,7 @@ init_per_group(Group, Config) ->
     Config2 = rabbit_ct_helpers:run_steps(Config1b,
                                           [fun merge_app_env/1 ] ++
                                           rabbit_ct_broker_helpers:setup_steps()),
+    Config3 =
     case rabbit_ct_broker_helpers:enable_feature_flag(Config2, quorum_queue) of
         ok ->
             ok = rabbit_ct_broker_helpers:rpc(
@@ -70,12 +71,19 @@ init_per_group(Group, Config) ->
         Skip ->
             end_per_group(Group, Config2),
             Skip
-    end.
+    end,
+    rabbit_ct_broker_helpers:set_policy(
+        Config3, 0,
+        <<"ha-policy">>, <<".*">>, <<"queues">>,
+        [{<<"ha-mode">>, <<"all">>}]),
+    Config3.
 
 merge_app_env(Config) ->
     rabbit_ct_helpers:merge_app_env(
       rabbit_ct_helpers:merge_app_env(Config,
-                                      {rabbit, [{core_metrics_gc_interval, 100}]}),
+                                      {rabbit,
+                                       [{core_metrics_gc_interval, 100},
+                                       {log, [{file, [{level, debug}]}]}]}),
       {ra, [{min_wal_roll_over_interval, 30000}]}).
 
 end_per_group(_Group, Config) ->
@@ -119,13 +127,13 @@ smoke(Config) ->
              #'basic.ack'{}  -> ok;
              #'basic.nack'{} -> fail
          after 2500 ->
+                   flush(),
                    exit(confirm_timeout)
          end,
     DTag = basic_get(Ch, QName),
 
     basic_ack(Ch, DTag),
     basic_get_empty(Ch, QName),
-
 
     %% consume
     publish(Ch, QName, <<"msg2">>),
@@ -214,3 +222,12 @@ basic_nack(Ch, DTag) ->
     amqp_channel:cast(Ch, #'basic.nack'{delivery_tag = DTag,
                                         requeue = true,
                                         multiple = false}).
+
+flush() ->
+    receive
+        Any ->
+            ct:pal("flush ~p", [Any]),
+            flush()
+    after 0 ->
+              ok
+    end.

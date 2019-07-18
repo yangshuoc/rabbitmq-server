@@ -552,6 +552,7 @@ state_enter(leader, #?MODULE{consumers = Cons,
     Nots = [{send_msg, P, leader_change, ra_event} || P <- Pids],
     NodeMons = lists:usort([{monitor, node, node(P)} || P <- Pids]),
     Effects = Mons ++ Nots ++ NodeMons,
+    rabbit_log:info("state_enter leader effects  ~p" ,[Effects]),
     case BLH of
         undefined ->
             Effects;
@@ -636,6 +637,8 @@ handle_aux(_, cast, Cmd, {Name, Use0}, Log, _) ->
               emit ->
                   true = ets:insert(rabbit_fifo_usage,
                                     {Name, utilisation(Use0)}),
+                  Use0;
+              _ ->
                   Use0
           end,
     {no_reply, {Name, Use}, Log}.

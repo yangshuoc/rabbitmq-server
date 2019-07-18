@@ -700,8 +700,8 @@ bq_variable_queue_delete_msg_store_files_callback1(Config) ->
     {ok, Limiter} = rabbit_limiter:start_link(no_id),
 
     CountMinusOne = Count - 1,
-    {ok, CountMinusOne, {QName, QPid, _AckTag, false, _Msg}} =
-        rabbit_amqqueue:basic_get(Q, self(), true, Limiter,
+    {ok, CountMinusOne, {QName, QPid, _AckTag, false, _Msg}, _} =
+        rabbit_amqqueue:basic_get(Q, true, Limiter,
                                   <<"bq_variable_queue_delete_msg_store_files_callback1">>,
                                   #{}),
     {ok, CountMinusOne} = rabbit_amqqueue:purge(Q),
@@ -733,7 +733,7 @@ bq_queue_recover1(Config) ->
     after 10000 -> exit(timeout_waiting_for_queue_death)
     end,
     rabbit_amqqueue:stop(?VHOST),
-    {Recovered, [], []} = rabbit_amqqueue:recover(?VHOST),
+    {Recovered, []} = rabbit_amqqueue:recover(?VHOST),
     rabbit_amqqueue:start(Recovered),
     {ok, Limiter} = rabbit_limiter:start_link(no_id),
     rabbit_amqqueue:with_or_die(
@@ -741,8 +741,8 @@ bq_queue_recover1(Config) ->
       fun (Q1) when ?is_amqqueue(Q1) ->
               QPid1 = amqqueue:get_pid(Q1),
               CountMinusOne = Count - 1,
-              {ok, CountMinusOne, {QName, QPid1, _AckTag, true, _Msg}} =
-                  rabbit_amqqueue:basic_get(Q1, self(), false, Limiter,
+              {ok, CountMinusOne, {QName, QPid1, _AckTag, true, _Msg}, _} =
+                  rabbit_amqqueue:basic_get(Q1, false, Limiter,
                                             <<"bq_queue_recover1">>, #{}),
               exit(QPid1, shutdown),
               VQ1 = variable_queue_init(Q, true),
@@ -1382,7 +1382,7 @@ publish_and_confirm(Q, Payload, Count) ->
          Delivery = #delivery{mandatory = false, sender = self(),
                               confirm = true, message = Msg, msg_seq_no = Seq,
                               flow = noflow},
-         _QPids = rabbit_amqqueue:deliver([Q], Delivery)
+         _QPids = rabbit_queue_type:deliver([Q], Delivery, #{})
      end || Seq <- Seqs],
     wait_for_confirms(gb_sets:from_list(Seqs)).
 
