@@ -7,9 +7,7 @@
          get_context/0,
          get_boot_state/0,
          set_boot_state/1,
-         is_boot_state_reached/1,
          wait_for_boot_state/1,
-         wait_for_boot_state/2,
          get_stop_reason/0,
          set_stop_reason/1,
          clear_stop_reason/0,
@@ -23,7 +21,6 @@
 -endif.
 
 -define(PT_KEY_CONTEXT,       {?MODULE, context}).
--define(PT_KEY_BOOT_STATE,    {?MODULE, boot_state}).
 -define(PT_KEY_INITIAL_PASS,  {?MODULE, initial_pass_finished}).
 -define(PT_KEY_SHUTDOWN_FUNC, {?MODULE, chained_shutdown_func}).
 -define(PT_KEY_STOP_REASON,   {?MODULE, stop_reason}).
@@ -136,61 +133,13 @@ clear_context_cache() ->
 -endif.
 
 get_boot_state() ->
-    persistent_term:get(?PT_KEY_BOOT_STATE, stopped).
+  rabbit_prelaunch_boot_state:get_boot_state().
 
-set_boot_state(stopped) ->
-    rabbit_log_prelaunch:debug("Change boot state to `stopped`"),
-    persistent_term:erase(?PT_KEY_BOOT_STATE);
 set_boot_state(BootState) ->
-    rabbit_log_prelaunch:debug("Change boot state to `~s`", [BootState]),
-    ?assert(is_boot_state_valid(BootState)),
-    persistent_term:put(?PT_KEY_BOOT_STATE, BootState).
+  rabbit_prelaunch_boot_state:set_boot_state(BootState).
 
 wait_for_boot_state(BootState) ->
-    wait_for_boot_state(BootState, infinity).
-
-wait_for_boot_state(BootState, Timeout) ->
-    ?assert(is_boot_state_valid(BootState)),
-    wait_for_boot_state1(BootState, Timeout).
-
-wait_for_boot_state1(BootState, infinity = Timeout) ->
-    case is_boot_state_reached(BootState) of
-        true  -> ok;
-        false -> wait_for_boot_state1(BootState, Timeout)
-    end;
-wait_for_boot_state1(BootState, Timeout)
-  when is_integer(Timeout) andalso Timeout >= 0 ->
-    case is_boot_state_reached(BootState) of
-        true  -> ok;
-        false -> Wait = 200,
-                 timer:sleep(Wait),
-                 wait_for_boot_state1(BootState, Timeout - Wait)
-    end;
-wait_for_boot_state1(_, _) ->
-    {error, timeout}.
-
-boot_state_idx(stopped)  -> 0;
-boot_state_idx(booting)  -> 1;
-boot_state_idx(ready)    -> 2;
-boot_state_idx(stopping) -> 3;
-boot_state_idx(_)        -> undefined.
-
-is_boot_state_valid(BootState) ->
-    is_integer(boot_state_idx(BootState)).
-
-is_boot_state_reached(TargetBootState) ->
-    is_boot_state_reached(get_boot_state(), TargetBootState).
-
-is_boot_state_reached(CurrentBootState, CurrentBootState) ->
-    true;
-is_boot_state_reached(stopping, stopped) ->
-    false;
-is_boot_state_reached(_CurrentBootState, stopped) ->
-    true;
-is_boot_state_reached(stopped, _TargetBootState) ->
-    true;
-is_boot_state_reached(CurrentBootState, TargetBootState) ->
-    boot_state_idx(TargetBootState) =< boot_state_idx(CurrentBootState).
+  rabbit_prelaunch_boot_state:wait_for_boot_state(BootState).
 
 get_stop_reason() ->
     persistent_term:get(?PT_KEY_STOP_REASON, undefined).
