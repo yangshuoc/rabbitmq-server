@@ -133,13 +133,13 @@ clear_context_cache() ->
 -endif.
 
 get_boot_state() ->
-  rabbit_prelaunch_boot_state:get_boot_state().
+  rabbit_boot_state:get_boot_state().
 
 set_boot_state(BootState) ->
-  rabbit_prelaunch_boot_state:set_boot_state(BootState).
+  rabbit_boot_state:set_boot_state(BootState).
 
 wait_for_boot_state(BootState) ->
-  rabbit_prelaunch_boot_state:wait_for_boot_state(BootState).
+  rabbit_boot_state:wait_for_boot_state(BootState).
 
 get_stop_reason() ->
     persistent_term:get(?PT_KEY_STOP_REASON, undefined).

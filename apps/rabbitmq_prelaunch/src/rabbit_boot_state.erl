@@ -15,7 +15,7 @@
 %% Copyright (c) 2007-2020 Pivotal Software, Inc.  All rights reserved.
 %%
 
--module(rabbit_prelaunch_boot_state).
+-module(rabbit_boot_state).
 
 -include_lib("eunit/include/eunit.hrl").
 
