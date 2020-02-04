@@ -405,12 +405,12 @@ start_it(StartType) ->
     end.
 
 wait_for_ready_or_stopped() ->
-    ok = rabbit_prelaunch:wait_for_boot_state(ready),
-    case rabbit_prelaunch:get_boot_state() of
+    ok = rabbit_boot_state:wait_for_boot_state(ready),
+    case rabbit_boot_state:get_boot_state() of
         ready ->
             ok;
         _ ->
-            ok = rabbit_prelaunch:wait_for_boot_state(stopped),
+            ok = rabbit_boot_state:wait_for_boot_state(stopped),
             rabbit_prelaunch:get_stop_reason()
     end.
 
@@ -434,7 +434,7 @@ stop_boot_marker(Marker) ->
 stop() ->
     case wait_for_ready_or_stopped() of
         ok ->
-            case rabbit_prelaunch:get_boot_state() of
+            case rabbit_boot_state:get_boot_state() of
                 ready ->
                     rabbit_log:info("RabbitMQ is asked to stop..."),
                     do_stop(),
@@ -543,7 +543,7 @@ handle_app_error(Term) ->
 is_booting() -> is_booting(node()).
 
 is_booting(Node) when Node =:= node() ->
-    case rabbit_prelaunch:get_boot_state() of
+    case rabbit_boot_state:get_boot_state() of
         booting           -> true;
         _                 -> false
     end;
@@ -742,7 +742,7 @@ is_running() -> is_running(node()).
 -spec is_running(node()) -> boolean().
 
 is_running(Node) when Node =:= node() ->
-    case rabbit_prelaunch:get_boot_state() of
+    case rabbit_boot_state:get_boot_state() of
         ready       -> true;
         _           -> false
     end;
@@ -812,7 +812,7 @@ start(normal, []) ->
     %% This is important if the previous startup attempt failed after
     %% rabbitmq_prelaunch was started and the application is still
     %% running.
-    rabbit_prelaunch:set_boot_state(booting),
+    rabbit_boot_state:set_boot_state(booting),
     rabbit_prelaunch:clear_stop_reason(),
 
     try
@@ -856,7 +856,7 @@ start(normal, []) ->
             mnesia:stop(),
             rabbit_prelaunch_errors:log_error(Error),
             rabbit_prelaunch:set_stop_reason(Error),
-            rabbit_prelaunch:set_boot_state(stopped),
+            rabbit_boot_state:set_boot_state(stopped),
             Error;
         Class:Exception:Stacktrace ->
             mnesia:stop(),
@@ -864,7 +864,7 @@ start(normal, []) ->
               Class, Exception, Stacktrace),
             Error = {error, Exception},
             rabbit_prelaunch:set_stop_reason(Error),
-            rabbit_prelaunch:set_boot_state(stopped),
+            rabbit_boot_state:set_boot_state(stopped),
             Error
     end.
 
@@ -907,7 +907,7 @@ do_run_postlaunch_phase() ->
           end, Plugins),
 
         rabbit_log_prelaunch:debug("Marking RabbitMQ as running"),
-        rabbit_prelaunch:set_boot_state(ready),
+        rabbit_boot_state:set_boot_state(ready),
 
         ok = rabbit_lager:broker_is_started(),
         ok = log_broker_started(
@@ -932,7 +932,7 @@ prep_stop(State) ->
 -spec stop(_) -> 'ok'.
 
 stop(State) ->
-    rabbit_prelaunch:set_boot_state(stopping),
+    rabbit_boot_state:set_boot_state(stopping),
     ok = rabbit_alarm:stop(),
     ok = case rabbit_mnesia:is_clustered() of
              true  -> ok;
@@ -942,7 +942,7 @@ stop(State) ->
         [] -> rabbit_prelaunch:set_stop_reason(normal);
         _  -> rabbit_prelaunch:set_stop_reason(State)
     end,
-    rabbit_prelaunch:set_boot_state(stopped),
+    rabbit_boot_state:set_boot_state(stopped),
     ok.
 
 %%---------------------------------------------------------------------------

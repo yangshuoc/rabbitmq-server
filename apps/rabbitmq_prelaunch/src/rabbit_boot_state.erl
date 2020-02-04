@@ -25,9 +25,15 @@
 
 -define(PT_KEY_BOOT_STATE,    {?MODULE, boot_state}).
 
+-type boot_state() :: 'stopped' | 'booting' | 'ready' | 'stopping'.
+
+-export_type([boot_state/0]).
+
+-spec get_boot_state() -> boot_state().
 get_boot_state() ->
   persistent_term:get(?PT_KEY_BOOT_STATE, stopped).
 
+-spec set_boot_state(boot_state()) -> term().
 set_boot_state(BootState) ->
   rabbit_log_prelaunch:debug("Change boot state to `~s`", [BootState]),
   ?assert(is_boot_state_valid(BootState)),
@@ -35,8 +41,9 @@ set_boot_state(BootState) ->
     stopped -> persistent_term:erase(?PT_KEY_BOOT_STATE);
     _ -> persistent_term:put(?PT_KEY_BOOT_STATE, BootState)
   end,
-  notify_external_service_manager(BootState).
+  notify_boot_state_listeners(BootState).
 
+-spec wait_for_boot_state(boot_state()) -> term().
 wait_for_boot_state(BootState) ->
   wait_for_boot_state(BootState, infinity).
 
@@ -83,10 +90,10 @@ is_boot_state_reached(stopped, _TargetBootState) ->
 is_boot_state_reached(CurrentBootState, TargetBootState) ->
   boot_state_idx(TargetBootState) =< boot_state_idx(CurrentBootState).
 
-notify_external_service_manager(ready) ->
-  case os:type() of
-    win32 -> ok;
-    _ -> systemd:notify_ready(), ok
-  end;
-notify_external_service_manager(_) ->
-  ok.
+notify_boot_state_listeners(BootState) ->
+    lists:foreach(fun({_Id, Child, _Type, _Modules}) when is_pid(Child) ->
+                          gen_server:cast(Child, {notify_boot_state, BootState});
+                     (_) -> 
+                          ok
+                  end,
+                  supervisor:which_children(rabbit_boot_state_sup)).

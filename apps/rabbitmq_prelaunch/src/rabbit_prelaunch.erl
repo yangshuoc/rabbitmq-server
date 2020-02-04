@@ -5,9 +5,6 @@
 -export([run_prelaunch_first_phase/0,
          assert_mnesia_is_stopped/0,
          get_context/0,
-         get_boot_state/0,
-         set_boot_state/1,
-         wait_for_boot_state/1,
          get_stop_reason/0,
          set_stop_reason/1,
          clear_stop_reason/0,
@@ -32,21 +29,21 @@ run_prelaunch_first_phase() ->
         throw:{error, _} = Error ->
             rabbit_prelaunch_errors:log_error(Error),
             set_stop_reason(Error),
-            set_boot_state(stopped),
+            rabbit_boot_state:set_boot_state(stopped),
             Error;
         Class:Exception:Stacktrace ->
             rabbit_prelaunch_errors:log_exception(
               Class, Exception, Stacktrace),
             Error = {error, Exception},
             set_stop_reason(Error),
-            set_boot_state(stopped),
+            rabbit_boot_state:set_boot_state(stopped),
             Error
     end.
 
 do_run() ->
     %% Indicate RabbitMQ is booting.
     clear_stop_reason(),
-    set_boot_state(booting),
+    rabbit_boot_state:set_boot_state(booting),
 
     %% Configure dbg if requested.
     rabbit_prelaunch_early_logging:enable_quick_dbg(rabbit_env:dbg_config()),
@@ -131,15 +128,6 @@ get_context() ->
 clear_context_cache() ->
     persistent_term:erase(?PT_KEY_CONTEXT).
 -endif.
-
-get_boot_state() ->
-  rabbit_boot_state:get_boot_state().
-
-set_boot_state(BootState) ->
-  rabbit_boot_state:set_boot_state(BootState).
-
-wait_for_boot_state(BootState) ->
-  rabbit_boot_state:wait_for_boot_state(BootState).
 
 get_stop_reason() ->
     persistent_term:get(?PT_KEY_STOP_REASON, undefined).

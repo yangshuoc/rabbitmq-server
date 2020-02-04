@@ -15,36 +15,69 @@
 %% Copyright (c) 2007-2020 Pivotal Software, Inc.  All rights reserved.
 %%
 
--module(systemd).
+-module(rabbit_boot_state_systemd).
 
--export([notify_ready/0]).
+-behavior(gen_server).
 
--spec notify_ready() -> boolean().
-%% Try to send systemd ready notification. standard_error is used
-%% intentionally in all logging statements, so all this messages will
-%% end up in systemd journal.
-notify_ready() ->
-  case rabbit_prelaunch:get_context() of
-    #{systemd_notify_socket := Socket} when Socket =/= undefined ->
-      Notified = sd_notify_legacy() orelse sd_notify_socat(),
-      if not Notified ->
-        io:format(standard_error, "systemd READY notification failed, beware of timeouts~n", []) end,
-      Notified;
-    _ -> rabbit_log_prelaunch:debug("NOTIFY_SOCKET has not been set, will not attempt to notify systemd~n", []), false
-  end.
+-export([start_link/0]).
+
+-export([init/1,
+         handle_call/3,
+         handle_cast/2,
+         handle_info/2,
+         terminate/2,
+         code_change/3]).
+
+-record(state, {sd_notify_module,
+                socket}).
+
+
+start_link() ->
+    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
+
+init([]) ->
+    case code:load_file(sd_notify) of
+        {module, sd_notify} ->
+            {ok, #state{sd_notify_module = sd_notify}};
+        {error, _} ->
+            case rabbit_prelaunch:get_context() of
+                #{systemd_notify_socket := Socket} when Socket =/= undefined ->
+                    {ok, #state{socket = Socket}};
+                _ ->
+                    ignore
+            end
+    end.
+
+handle_call(_Request, _From, State) ->
+    {noreply, State}.
+
+handle_cast({notify_boot_state, ready}, #{sd_notify_module := SDNotify} = State) ->
+    sd_notify_legacy(SDNotify),
+    {noreply, State};
+handle_cast({notify_boot_state, ready}, #{socket := Socket} = State) ->
+    sd_notify_socat(Socket),
+    {noreply, State};
+handle_cast({notify_boot_state, _BootState}, State) ->
+    {noreply, State}.
+
+handle_info(Msg, State) ->
+    io:format(standard_error, "Unexpected message: ~p~n",[Msg]),
+    {noreply, State}.
+
+terminate(normal, _State) ->
+    rabbit_log_prelaunch:info("~p terminating.~n", ?MODULE),
+    ok.
+
+code_change(_OldVsn, State, _Extra) ->
+    {ok, State}.
+
+%%% Private
 
 sd_notify_message() ->
   "READY=1\nSTATUS=Initialized\nMAINPID=" ++ os:getpid() ++ "\n".
 
-sd_notify_legacy() ->
-  case code:load_file(sd_notify) of
-    {module, sd_notify} ->
-      SDNotify = sd_notify,
-      SDNotify:sd_notify(0, sd_notify_message()),
-      true;
-    {error, _} ->
-      false
-  end.
+sd_notify_legacy(SDNotify) ->
+    SDNotify:sd_notify(0, sd_notify_message()).
 
 %% socat(1) is the most portable way the sd_notify could be
 %% implemented in erlang, without introducing some NIF. Currently the
@@ -55,17 +88,17 @@ sd_notify_legacy() ->
 %%
 %% Some details on how we ended with such a solution:
 %%   https://github.com/rabbitmq/rabbitmq-server/issues/664
-sd_notify_socat() ->
+sd_notify_socat(Socket) ->
   case sd_current_unit() of
     {ok, Unit} ->
       io:format(standard_error, "systemd unit for activation check: \"~s\"~n", [Unit]),
-      sd_notify_socat(Unit);
+      sd_notify_socat(Socket, Unit);
     _ ->
       false
   end.
 
-sd_notify_socat(Unit) ->
-  try sd_open_port() of
+sd_notify_socat(Socket, Unit) ->
+  try sd_open_port(Socket) of
     Port ->
       Port ! {self(), {command, sd_notify_message()}},
       Result = sd_wait_activation(Port, Unit),
@@ -93,9 +126,7 @@ socat_socket_arg("@" ++ AbstractUnixSocket) ->
 socat_socket_arg(UnixSocket) ->
   "unix-sendto:" ++ UnixSocket.
 
-sd_open_port() ->
-  #{systemd_notify_socket := Socket} = rabbit_prelaunch:get_context(),
-  true = Socket =/= undefined,
+sd_open_port(Socket) ->
   open_port(
     {spawn_executable, os:find_executable("socat")},
     [{args, [socat_socket_arg(Socket), "STDIO"]},
