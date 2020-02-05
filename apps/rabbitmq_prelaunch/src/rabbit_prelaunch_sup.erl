@@ -17,4 +17,6 @@ init([]) ->
                   start => {rabbit_prelaunch, run_prelaunch_first_phase, []},
                   restart => transient},
     Procs = [BootStateSup, Prelaunch],
-    {ok, {{one_for_one, 1, 5}, Procs}}.
+    {ok, {#{strategy => one_for_one,
+            intensity => 1,
+            period => 5}, Procs}}.
