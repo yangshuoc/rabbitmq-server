@@ -27,10 +27,13 @@ start_link() ->
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
 init([]) ->
-    Procs = [#{id => rabbit_boot_state_systemd,
-               start => {rabbit_boot_state_systemd, start_link, []},
-               restart => transient}],
-    {ok, {{one_for_one, 1, 5}, Procs}}.
+    SystemdSpec = #{id => rabbit_boot_state_systemd,
+                    start => {rabbit_boot_state_systemd, start_link, []},
+                    restart => transient},
+    {ok, {#{strategy => one_for_one,
+            intensity => 1,
+            period => 5},
+          [SystemdSpec]}}.
 
 child_pids() ->
     lists:filtermap(fun({_, Child, _, _}) when is_pid(Child) -> {true, Child};
