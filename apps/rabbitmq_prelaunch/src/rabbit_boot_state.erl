@@ -91,9 +91,7 @@ is_boot_state_reached(CurrentBootState, TargetBootState) ->
   boot_state_idx(TargetBootState) =< boot_state_idx(CurrentBootState).
 
 notify_boot_state_listeners(BootState) ->
-    lists:foreach(fun({_Id, Child, _Type, _Modules}) when is_pid(Child) ->
-                          gen_server:cast(Child, {notify_boot_state, BootState});
-                     (_) -> 
-                          ok
+    lists:foreach(fun(Child) ->
+                          gen_server:cast(Child, {notify_boot_state, BootState})
                   end,
-                  supervisor:which_children(rabbit_boot_state_sup)).
+                  rabbit_boot_state_sup:child_pids()).

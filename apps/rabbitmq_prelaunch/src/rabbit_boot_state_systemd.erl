@@ -52,9 +52,11 @@ handle_call(_Request, _From, State) ->
     {noreply, State}.
 
 handle_cast({notify_boot_state, ready}, #{sd_notify_module := SDNotify} = State) ->
+    rabbit_log_prelaunch:debug("notifying systemd of readiness via native module"),
     sd_notify_legacy(SDNotify),
     {noreply, State};
 handle_cast({notify_boot_state, ready}, #{socket := Socket} = State) ->
+    rabbit_log_prelaunch:debug("notifying systemd of readiness via socat"),
     sd_notify_socat(Socket),
     {noreply, State};
 handle_cast({notify_boot_state, _BootState}, State) ->
@@ -65,7 +67,7 @@ handle_info(Msg, State) ->
     {noreply, State}.
 
 terminate(normal, _State) ->
-    rabbit_log_prelaunch:info("~p terminating.~n", ?MODULE),
+    io:format(standard_error, "~p terminating.~n", [?MODULE]),
     ok.
 
 code_change(_OldVsn, State, _Extra) ->
